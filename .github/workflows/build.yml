@@ -41,6 +41,7 @@ jobs:
           mkdir -p ../../out
           zip -X -r ../../out/gmcat-monitor-gnome-$VER.zip metadata.json extension.js prefs.js stylesheet.css schemas art
       - uses: actions/attest-build-provenance@v2
+        if: ${{ !github.event.repository.private }}   # free for public repos
         with: { subject-path: "out/*" }
       - uses: actions/upload-artifact@v4
         with: { name: gnome, path: out/* }
@@ -85,6 +86,7 @@ jobs:
           esac
           ls -la out
       - uses: actions/attest-build-provenance@v2
+        if: ${{ !github.event.repository.private }}   # free for public repos
         with: { subject-path: "out/*" }
       - uses: actions/upload-artifact@v4
         with: { name: "${{ matrix.name }}", path: out/* }
