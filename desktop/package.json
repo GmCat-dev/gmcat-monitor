@@ -1,0 +1,9 @@
+{
+  "name": "gmcat-monitor-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GmCat Monitor for Windows, Mac and Linux (Tauri 2)",
+  "license": "AGPL-3.0-or-later",
+  "scripts": { "tauri": "tauri" },
+  "devDependencies": { "@tauri-apps/cli": "^2" }
+}

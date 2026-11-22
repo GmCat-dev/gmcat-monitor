@@ -1,0 +1,33 @@
+[package]
+name = "gmcat-monitor"
+version = "0.1.0"
+description = "GmCat Monitor: processor, memory and swap at a glance, with a mood cat"
+authors = ["GmCat"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/GmCat-dev/gmcat-monitor"
+edition = "2021"
+
+[lib]
+name = "gmcat_monitor"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

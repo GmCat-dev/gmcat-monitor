@@ -1,0 +1,109 @@
+# Builds GmCat Monitor on GitHub's machines from this public code, then records a signed build attestation for every
+# file (so anyone can check a download came from this code: gh attestation verify FILE --repo GmCat-dev/gmcat-monitor).
+# Run by hand (Actions -> Build GmCat Monitor -> Run workflow) or push a tag like v0.1.0 to publish a release.
+name: Build GmCat Monitor
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Mood rules
+        run: rustc --edition 2021 --test desktop/src-tauri/src/mood.rs -o mood-test && ./mood-test
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Desktop screens (browser test)
+        working-directory: desktop
+        run: npm i --no-save puppeteer@23 && node tests/ui_test.mjs
+
+  gnome:
+    needs: test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libglib2.0-bin zip
+      - name: Pack the GNOME extension
+        run: |
+          set -euo pipefail
+          VER=$(python3 -c "import json;print(json.load(open('desktop/src-tauri/tauri.conf.json'))['version'])")
+          cd gnome/gmcat-monitor@gmcat.io
+          glib-compile-schemas schemas
+          mkdir -p ../../out
+          zip -X -r ../../out/gmcat-monitor-gnome-$VER.zip metadata.json extension.js prefs.js stylesheet.css schemas art
+      - uses: actions/attest-build-provenance@v2
+        with: { subject-path: "out/*" }
+      - uses: actions/upload-artifact@v4
+        with: { name: gnome, path: out/* }
+
+  desktop:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, args: "", name: windows }
+          - { os: macos-latest, args: "--target universal-apple-darwin", name: mac }
+          - { os: ubuntu-22.04, args: "", name: linux }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: desktop/src-tauri }
+      - if: matrix.name == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: npm ci || npm install
+        working-directory: desktop
+      - run: npx tauri build ${{ matrix.args }}
+        working-directory: desktop
+      - name: Give the files plain names
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
+          T=desktop/src-tauri/target
+          mkdir -p out
+          case "${{ matrix.name }}" in
+            windows) cp $T/release/bundle/nsis/*.exe "out/GmCat-Monitor-$VER-windows-setup.exe" ;;
+            mac)     cp $T/universal-apple-darwin/release/bundle/dmg/*.dmg "out/GmCat-Monitor-$VER-mac.dmg" ;;
+            linux)   cp $T/release/bundle/appimage/*.AppImage "out/GmCat-Monitor-$VER-linux.AppImage"
+                     cp $T/release/bundle/deb/*.deb "out/gmcat-monitor_${VER}_amd64.deb" ;;
+          esac
+          ls -la out
+      - uses: actions/attest-build-provenance@v2
+        with: { subject-path: "out/*" }
+      - uses: actions/upload-artifact@v4
+        with: { name: "${{ matrix.name }}", path: out/* }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [gnome, desktop]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Publish the release with fingerprints
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          set -euo pipefail
+          cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+          cat > ../notes.md <<NOTES
+          Built by GitHub Actions from commit ${GITHUB_SHA} ([build log](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})).
+          Check a file: compare its SHA-256 with SHA256SUMS.txt, or run \`gh attestation verify FILE --repo ${GITHUB_REPOSITORY}\`.
+          Install help: https://apps.gmcat.io/install-help/
+          NOTES
+          gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" --title "GmCat Monitor $GITHUB_REF_NAME" --notes-file ../notes.md

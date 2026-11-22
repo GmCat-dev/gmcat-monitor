@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>GmCat Monitor panel</title>
+<link rel="stylesheet" href="panel.css"></head>
+<body>
+<div id="panel" class="panel gmcat" hidden>
+  <div class="head"><img id="cat" class="cat" src="art/happy.png" alt=""><p id="line" class="line">Purring along.</p></div>
+  <div class="card" data-k="cpu"><div class="top"><span class="name">Processor</span><span class="val">–</span></div><canvas></canvas><p class="sub"></p></div>
+  <div class="card" data-k="mem"><div class="top"><span class="name">Memory</span><span class="val">–</span></div><canvas></canvas><p class="sub"></p></div>
+  <div class="card" data-k="swap"><div class="top"><span class="name">Swap</span><span class="val">–</span></div><canvas></canvas><p class="sub"></p></div>
+</div>
+<script src="panel.js"></script>
+</body></html>

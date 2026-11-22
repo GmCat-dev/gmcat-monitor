@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the panel and settings windows may do",
+  "windows": ["panel", "settings"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://*.gmcat.io/*" }, { "url": "https://github.com/GmCat-dev/*" }] }
+  ]
+}

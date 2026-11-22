@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>GmCat Monitor</title>
+<link rel="stylesheet" href="settings.css"></head>
+<body>
+<header><img src="art/happy.png" alt="" class="logo"><div><h1>GmCat Monitor</h1><p>Processor, memory and swap at a glance.</p></div></header>
+<section id="welcome" class="welcome" hidden>
+  <h2>Hi! I'm watching your computer now 😺</h2>
+  <p id="where"></p>
+  <p>I start by myself when you sign in. You can change that below.</p>
+</section>
+<main>
+  <label class="row"><span>Look</span>
+    <select id="theme"><option value="gmcat">GmCat (mood cat)</option><option value="plain">Plain</option></select></label>
+  <label class="row"><span>Show on the desktop</span><input type="checkbox" id="showDesktop" class="sw"></label>
+  <label class="row"><span>Desktop side</span>
+    <select id="side"><option value="right">Right</option><option value="left">Left</option></select></label>
+  <label class="row"><span>Desktop panel size <small id="scaleV"></small></span><input type="range" id="scale" min="0.7" max="1.6" step="0.05"></label>
+  <label class="row"><span>Update every</span>
+    <select id="refreshSeconds"><option value="1">1 second</option><option value="2">2 seconds</option><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="10">10 seconds</option></select></label>
+  <label class="row mac-only" hidden><span>Numbers in the menu bar</span><input type="checkbox" id="trayNumbers" class="sw"></label>
+  <label class="row"><span>Start when I sign in</span><input type="checkbox" id="autostart" class="sw"></label>
+  <label class="row win-only" hidden><span>Pin into the wallpaper <small>(experimental: stays visible after “Show desktop”)</small></span><input type="checkbox" id="pinToWallpaper" class="sw"></label>
+</main>
+<footer>
+  <p id="saved" class="saved" aria-live="polite"></p>
+  <p>Free and open source. Collects nothing, never goes online.<br>
+  <a href="#" data-url="https://github.com/GmCat-dev/gmcat-monitor">Source code</a> · <a href="#" data-url="https://apps.gmcat.io/monitor/">apps.gmcat.io</a> · <span id="ver"></span></p>
+</footer>
+<script src="settings.js"></script>
+</body></html>
