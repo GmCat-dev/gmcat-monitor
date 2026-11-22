@@ -1,0 +1,25 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'io.gmcat.monitor'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.gmcat.monitor'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+    }
+    // Release signing comes from the GitHub build's secrets (GMM_KEYSTORE file + GMM_KEY_PASS); never stored in the code.
+    signingConfigs {
+        release {
+            if (System.getenv('GMM_KEYSTORE')) {
+                storeFile file(System.getenv('GMM_KEYSTORE'))
+                storePassword System.getenv('GMM_KEY_PASS')
+                keyAlias 'gmcat-monitor'
+                keyPassword System.getenv('GMM_KEY_PASS')
+            }
+        }
+    }
+    buildTypes { release { minifyEnabled false; if (System.getenv('GMM_KEYSTORE')) signingConfig signingConfigs.release } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
