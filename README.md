@@ -22,7 +22,7 @@ Every release file is built by GitHub Actions from this code (see `.github/workf
 attestation:
 
 ```
-gh attestation verify GmCat-Monitor-0.1.0-windows-setup.exe --repo GmCat-dev/gmcat-monitor
+gh attestation verify GmCat-Monitor-0.2.0-windows-setup.exe --repo GmCat-dev/gmcat-monitor
 ```
 
 or compare its SHA-256 with `SHA256SUMS.txt` on the release page.
@@ -58,6 +58,14 @@ Tests: `rustc --edition 2021 --test desktop/src-tauri/src/mood.rs -o mood-test &
 | Queasy | swap moving more than 1 MB/s (Linux), or swap 80%+ and memory 88%+ full |
 
 A new mood has to hold for two updates before the cat changes, so she doesn't flicker.
+
+## Clear swap (Linux top bar)
+
+Top-bar menu > **Clear swap…** opens a dialog that shows how much is in swap and how much memory is free, and
+explains what clearing does. **Clear swap** is only clickable when it is safe: free memory must hold everything in swap
+plus a cushion (1 GB or a tenth of memory, whichever is bigger), otherwise clearing could freeze the computer.
+It runs `swapoff -a && swapon -a` through `pkexec`, so your computer asks for your password; the result shows as a
+notification. Nothing is lost: what was in swap moves back into memory.
 
 ## Licence
 

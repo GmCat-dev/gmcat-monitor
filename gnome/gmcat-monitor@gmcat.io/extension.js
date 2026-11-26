@@ -9,6 +9,7 @@ const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Util = imports.misc.util;
+const ModalDialog = imports.ui.modalDialog;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
 
@@ -69,6 +70,7 @@ class Stats {
             if (m) mi[m[1]] = Number(m[2]) * 1024;
         }
         this.memTotal = mi.MemTotal;
+        this.memAvail = mi.MemAvailable;
         this.memUsed = mi.MemTotal - mi.MemAvailable;
         this.mem = 100 * this.memUsed / this.memTotal;
         this.swapTotal = mi.SwapTotal || 0;
@@ -162,7 +164,7 @@ function topApps(n) {
             const st = readText(`/proc/${pid}/status`);
             const name = (st.match(/^Name:\s+(.+)$/m) || [])[1];
             const rss = (st.match(/^VmRSS:\s+(\d+)/m) || [])[1];
-            if (name && rss) sums[name] = (sums[name] || 0) + Number(rss) * 1024;
+            if (name && rss) { const k = prettyName(name); sums[k] = (sums[k] || 0) + Number(rss) * 1024; }
         } catch (e) { /* process ended */ }
     }
     en.close(null);
@@ -174,6 +176,98 @@ function prettyName(n) {
         'node': 'Node', 'node-MainThread': 'Node', 'claude.exe': 'Claude Code', 'python3': 'Python', 'firefox': 'Firefox', 'code': 'VS Code', 'claude': 'Claude Code' };
     return map[n] || n;
 }
+
+
+/* ---------- Clear swap: in-shell dialog with safety checks ---------- */
+function sizeText(b) { return b >= 1073741824 ? `${gb(b)} GB` : `${Math.max(0, Math.round(b / 1048576))} MB`; }
+
+/* What clearing would mean right now. Clearing moves everything in swap back into memory,
+ * so it needs that much free memory plus a safety cushion. */
+function swapCheck(s) {
+    const cushion = Math.max(1073741824, 0.10 * s.memTotal);
+    const spare = s.memAvail - s.swapUsed;
+    let state;
+    if (!s.swapTotal) state = 'none';
+    else if (s.swapUsed < 50 * 1048576) state = 'empty';
+    else if (spare < cushion) state = 'unsafe';
+    else state = 'safe';
+    const mins = s.swapUsed / (30 * 1048576) / 60;   // swapoff reads scattered pages: ~30 MB/s
+    const time = mins < 1 ? 'under a minute' : `about ${Math.ceil(mins)} minute${Math.ceil(mins) > 1 ? 's' : ''}`;
+    return { state, cushion, spare, time };
+}
+
+const ClearSwapDialog = GObject.registerClass(
+class GmCatClearSwapDialog extends ModalDialog.ModalDialog {
+    _init(ext, onClear) {
+        super._init({ styleClass: 'gmm-swap-dialog' });
+        this._ext = ext; this._onClear = onClear;
+        const box = new St.BoxLayout({ vertical: true, style_class: 'gmm-swap-box' });
+        const label = (cls, text = '') => {
+            const l = new St.Label({ style_class: cls, text });
+            l.clutter_text.line_wrap = true;
+            l.clutter_text.ellipsize = 0;
+            box.add_child(l);
+            return l;
+        };
+        label('gmm-swap-title', 'Clear swap?');
+        this._numbers = label('gmm-swap-numbers');
+        this._verdict = label('gmm-swap-verdict');
+        label('gmm-swap-head', 'Good to know');
+        this._notes = label('gmm-swap-notes');
+        label('gmm-swap-head', 'Using the most memory');
+        this._apps = label('gmm-swap-notes');
+        this.contentLayout.add_child(box);
+
+        this.addButton({ label: 'Cancel', action: () => this.close(), key: Clutter.KEY_Escape, default: true });
+        this._clearBtn = this.addButton({ label: 'Clear swap', action: () => this._clear() });
+        this._fill();
+        this._timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => { this._fill(); return GLib.SOURCE_CONTINUE; });
+        this.connect('destroy', () => { if (this._timer) GLib.source_remove(this._timer); this._timer = 0; });
+    }
+
+    _fill() {
+        const s = this._ext.stats;
+        if (!s) return;
+        const c = swapCheck(s);
+        this._check = c;
+        this._numbers.text = s.swapTotal
+            ? `Swap in use: ${sizeText(s.swapUsed)} of ${gb(s.swapTotal)} GB (${Math.round(s.swap)}%)\n` +
+              `Free memory: ${sizeText(s.memAvail)} of ${gb(s.memTotal)} GB`
+            : 'This computer has no swap set up.';
+        const v = {
+            none: ['Nothing to clear.', 'gmm-swap-ok'],
+            empty: ['Swap is already almost empty. Nothing to clear.', 'gmm-swap-ok'],
+            unsafe: [`Not safe right now. Clearing moves all ${sizeText(s.swapUsed)} back into memory, ` +
+                `but only ${sizeText(s.memAvail)} is free and it needs ${sizeText(c.cushion)} to spare. ` +
+                'Doing it now could freeze the computer or make apps close by themselves. ' +
+                'Close a few apps first (biggest below), then try again.', 'gmm-swap-bad'],
+            safe: [`Safe to clear. ${sizeText(s.swapUsed)} moves back into memory and ` +
+                `${sizeText(c.spare)} stays free.`, 'gmm-swap-ok'],
+        }[c.state];
+        this._verdict.text = v[0];
+        this._verdict.style_class = `gmm-swap-verdict ${v[1]}`;
+        const moving = s.swapRateAvg > 0.05 ? `moving ${s.swapRateAvg.toFixed(1)} MB/s right now` : 'quiet right now';
+        this._notes.text = [
+            `• A full swap is not harmful by itself. It only slows the computer when data keeps moving in and out (swap is ${moving}).`,
+            `• Clearing takes ${c.time}. The computer may feel slow meanwhile, so don't start big jobs.`,
+            '• Nothing is lost: what is in swap goes back into memory.',
+            '• Swap fills up again if the same apps stay open. Closing apps you no longer need is the lasting fix.',
+            '• Your computer will ask for your password.',
+        ].join('\n');
+        this._apps.text = topApps(4).map(([n, b]) => `${n}  ${sizeText(b)}`).join('\n');
+        const ok = c.state === 'safe' && !this._ext.clearing;
+        this._clearBtn.reactive = ok;
+        this._clearBtn.can_focus = ok;
+        this._clearBtn.opacity = ok ? 255 : 110;
+    }
+
+    _clear() {
+        this._fill();                      // check again at the moment of the click
+        if (this._check.state !== 'safe' || this._ext.clearing) return;
+        this.close();
+        this._onClear();
+    }
+});
 
 /* ---------- top bar ---------- */
 const Indicator = GObject.registerClass(
@@ -260,6 +354,9 @@ class GmCatMonitorIndicator extends PanelMenu.Button {
         const desk = new PopupMenu.PopupSwitchMenuItem('Show on the desktop', st.get_boolean('show-desktop'));
         desk.connect('toggled', (_i, on) => st.set_boolean('show-desktop', on));
         this.menu.addMenuItem(desk);
+        this._swapItem = new PopupMenu.PopupMenuItem('Clear swap…');
+        this._swapItem.connect('activate', () => this._ext.openClearSwap());
+        this.menu.addMenuItem(this._swapItem);
         const prefs = new PopupMenu.PopupMenuItem('Settings…');
         prefs.connect('activate', () => Util.spawn(['gnome-extensions', 'prefs', Me.uuid]));
         this.menu.addMenuItem(prefs);
@@ -271,7 +368,7 @@ class GmCatMonitorIndicator extends PanelMenu.Button {
         const list = topApps(5);
         this._apps.forEach(([n, v], i) => {
             const e = list[i];
-            n.text = e ? prettyName(e[0]) : '';
+            n.text = e ? e[0] : '';
             v.text = e ? (e[1] >= 1073741824 ? `${gb(e[1])} GB` : `${Math.round(e[1] / 1048576)} MB`) : '';
         });
     }
@@ -283,6 +380,8 @@ class GmCatMonitorIndicator extends PanelMenu.Button {
         if (this._label)
             this._label.text = `CPU ${Math.round(s.cpu)}%  Mem ${Math.round(s.mem)}%  Swap ${Math.round(s.swap)}%`;
         if (this.menu.isOpen) {
+            this._swapItem.label.text = this._ext.clearing ? 'Clearing swap…' : 'Clear swap…';
+            this._swapItem.setSensitive(!this._ext.clearing && s.swapTotal > 0);
             if (this._menuCat) setMoodIcon(this._menuCat, mood);
             const themed = !!this._menuCat;
             this._moodLabel.text = themed ? MOOD_LINES[mood][0] : `Status: ${MOOD_LINES[mood][1]}`;
@@ -418,8 +517,46 @@ class Extension {
         if (this._monId) Main.layoutManager.disconnect(this._monId);
         if (this._waId) global.display.disconnect(this._waId);
         this._settingsId = this._monId = this._waId = 0;
+        if (this._swapDialog) { this._swapDialog.destroy(); this._swapDialog = null; }
         this._teardown();
         this.settings = null; this.stats = null; this.mood = null;
+    }
+
+    openClearSwap() {
+        if (this._swapDialog) return;
+        this._swapDialog = new ClearSwapDialog(this, () => this._runClearSwap());
+        this._swapDialog.connect('destroy', () => { this._swapDialog = null; });
+        this._swapDialog.open();
+    }
+
+    /* swapoff -a moves everything back into memory, swapon -a turns swap back on.
+     * pkexec shows the system password box. */
+    _runClearSwap() {
+        if (this.clearing) return;
+        let proc;
+        try {
+            proc = Gio.Subprocess.new(['pkexec', '/bin/sh', '-c', '/usr/sbin/swapoff -a && /usr/sbin/swapon -a'],
+                Gio.SubprocessFlags.STDERR_PIPE);
+        } catch (e) {
+            Main.notify('GmCat Monitor', `Could not start clearing swap: ${e.message}`);
+            return;
+        }
+        this.clearing = true;
+        Main.notify('GmCat Monitor', 'Clearing swap… The computer may feel slow for a bit.');
+        proc.communicate_utf8_async(null, null, (p, res) => {
+            let err = '';
+            try { [, , err] = p.communicate_utf8_finish(res); } catch (e) { err = e.message; }
+            this.clearing = false;
+            const code = p.get_if_exited() ? p.get_exit_status() : -1;
+            let msg;
+            if (code === 0) msg = 'Swap cleared. 🐾';
+            else if (code === 126 || code === 127) msg = 'Swap not cleared: the password step was cancelled.';
+            else msg = `Swap not cleared (code ${code}). ${(err || '').trim().slice(0, 160)}`;
+            // swapoff may have stopped partway: make sure swap is on again
+            if (code !== 0 && code !== 126 && code !== 127 && this.stats && this.stats.swapTotal === 0)
+                msg += ' Swap may be off now; restart the computer to turn it back on.';
+            Main.notify('GmCat Monitor', msg);
+        });
     }
 
     _startTimer() {
