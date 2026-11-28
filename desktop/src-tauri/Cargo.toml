@@ -1,6 +1,6 @@
 [package]
 name = "gmcat-monitor"
-version = "0.2.0"
+version = "0.2.1"
 description = "GmCat Monitor: processor, memory and swap at a glance, with a mood cat"
 authors = ["GmCat"]
 license = "AGPL-3.0-or-later"

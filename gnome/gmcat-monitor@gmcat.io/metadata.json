@@ -2,8 +2,8 @@
   "uuid": "gmcat-monitor@gmcat.io",
   "name": "GmCat Monitor",
   "description": "CPU, memory and swap in the top bar and on the desktop, with a GmCat whose mood follows how busy the computer is. Switch between the GmCat look and a plain look in Settings.",
-  "shell-version": ["3.36"],
+  "shell-version": ["3.36", "42"],
   "settings-schema": "org.gnome.shell.extensions.gmcat-monitor",
   "url": "https://gmcat.io",
-  "version": 2
+  "version": 3
 }

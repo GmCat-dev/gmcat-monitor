@@ -2,20 +2,24 @@
 const { Gtk, Gio, GdkPixbuf } = imports.gi;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Me = ExtensionUtils.getCurrentExtension();
+const GTK4 = Gtk.get_major_version() >= 4;   // GNOME 40+ settings windows use GTK 4
+const put = (box, w) => GTK4 ? box.append(w) : box.add(w);
 
 function init() {}
 
 function buildPrefsWidget() {
     const s = ExtensionUtils.getSettings();
-    const grid = new Gtk.Grid({ margin: 24, row_spacing: 14, column_spacing: 24, visible: true });
+    const grid = new Gtk.Grid({ margin_top: 24, margin_bottom: 24, margin_start: 24, margin_end: 24, row_spacing: 14, column_spacing: 24, visible: true });
     let row = 0;
 
     const hb = new Gtk.Box({ spacing: 14, visible: true });
-    const pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(`${Me.path}/art/happy.png`, 64, 64, true);
-    hb.add(new Gtk.Image({ pixbuf: pb, visible: true }));
+    let img;
+    if (GTK4) { img = Gtk.Image.new_from_file(`${Me.path}/art/happy.png`); img.set_pixel_size(64); }
+    else img = new Gtk.Image({ pixbuf: GdkPixbuf.Pixbuf.new_from_file_at_scale(`${Me.path}/art/happy.png`, 64, 64, true), visible: true });
+    put(hb, img);
     const t = new Gtk.Label({ use_markup: true, xalign: 0, visible: true,
         label: '<b><big>GmCat Monitor</big></b>\nProcessor, memory and swap at a glance.' });
-    hb.add(t);
+    put(hb, t);
     grid.attach(hb, 0, row++, 2, 1);
 
     function label(text) {

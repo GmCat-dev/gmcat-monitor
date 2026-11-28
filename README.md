@@ -12,7 +12,7 @@ or pick the plain look.
 
 | Folder | What | Built with |
 |---|---|---|
-| `gnome/` | Linux GNOME Shell extension (top bar + desktop panel) | GJS, GNOME Shell 3.36 |
+| `gnome/` | Linux GNOME Shell extension (top bar + desktop panel) | GJS, GNOME Shell 3.36 and 42 |
 | `desktop/` | Windows, Mac and Linux app (tray / menu bar + desktop panel + Settings) | Tauri 2 (Rust + web view) |
 | `art/` | The GmCat mood pictures | |
 
@@ -22,7 +22,7 @@ Every release file is built by GitHub Actions from this code (see `.github/workf
 attestation:
 
 ```
-gh attestation verify GmCat-Monitor-0.2.0-windows-setup.exe --repo GmCat-dev/gmcat-monitor
+gh attestation verify GmCat-Monitor-0.2.1-windows-setup.exe --repo GmCat-dev/gmcat-monitor
 ```
 
 or compare its SHA-256 with `SHA256SUMS.txt` on the release page.
